@@ -1,0 +1,25 @@
+# VMware SDDC information
+vcenter: "vcenter.home.virtualelephant.com"
+vcenter_user: "administrator@vsphere.local"
+vcenter_pass: "PASSWORD"
+dc: "Lab"
+cluster_name: "R630 Cluster"
+datastore: "synlun-2"
+folder: "Kubernetes/Native"
+vm_prefix: "kube"
+ubuntu_template: "ubuntu-server-kube-22.04.1.lts"
+portgroup: "ve-tenant-1"
+num_nodes: 3
+
+# Kubernetes / OS information
+pod_cidr: "10.244.0.0/16"
+home_dir: "/home/deploy"
+
+# Worker node memory & vcpu settings
+node_mem: 8192
+node_vcpu: 4
+local_user: USER
+
+# Networking information
+virtual_service: "IP.ADD.RESS.LB"
+domain_name: "SUB.DOMAIN.NAME"

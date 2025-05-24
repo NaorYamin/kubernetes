@@ -1,0 +1,91 @@
+#####Prepare VM Image for k8s Cluster In VMWare Vsphere#####
+
+#Add the user to the sudoers
+sudo visudo
+
+#Add this line of user or any other user: 
+infra   ALL=(ALL) NOPASSWD: ALL
+
+#Exit the vm
+exit 
+
+#Update and upgrade packages 
+sudo apt-get update -y && sudo apt-get dist-upgrade -y
+
+#Install required packages 
+for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove -y $pkg; done
+
+#Add Docker's official GPG key:
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+sudo mkdir -p /etc/apt/sources.list.d
+
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+
+# Install Docker Engine, CLI and containerd
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+#Add user to docker group
+sudo usermod -aG docker $USER 
+
+#Test docker running the container "hello world"
+docker run hello-world
+
+#Disable volumes in linux 
+sudo swapoff -a  
+sudo sed -i '/\/swap\.img/ s/^/#/' /etc/fstab
+
+# Load kernel modules required for container networking and overlay filesystem
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+# This script creates /etc/modules-load.d/k8s.conf and adds required kernel modules for Kubernetes
+sudo bash -c 'cat > /etc/modules-load.d/k8s.conf <<EOF
+overlay
+br_netfilter
+EOF'
+
+# This script creates /etc/sysctl.d/k8s.conf and enables IPv4 forwarding for Kubernetes networking
+sudo bash -c 'echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/k8s.conf'
+
+# Validate the previous line was added 
+sudo sysctl --system
+
+# Generate the default containerd configuration file and save it to /etc/containerd/configl.toml
+sudo containerd config default | sudo tee /etc/containerd/config.toml >/dev/null 2>&1
+
+# Enable SystemdCgroup for better compatibility with Kubernetes and systemd-based resource management
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+
+#Restart and validate the containerd service is still running after changes
+sudo systemctl restart containerd && sudo systemctl status containerd 
+
+# Ensure that 8.8.8.8 is listed as a nameserver in /etc/resolv.conf; add it if not present
+grep -q '^nameserver 8.8.8.8' /etc/resolv.conf || echo 'nameserver 8.8.8.8' | sudo tee -a /etc/resolv.conf
+
+# Download the Kubernetes APT repository GPG key for version 1.31 and save it to /etc/apt/keyrings/k8s.gpg.
+# This key is required to verify the authenticity of Kubernetes packages during installation.
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/k8s.gpg
+
+#Update the packge management
+sudo apt-get update 
+
+#Install kubelet kubeadm and kubectl
+sudo apt-get install kubelet kubeadm kubectl -y
+
+# Prevent kubectl, kubeadm, and kubelet from being automatically upgraded or removed by the package manager.
+sudo apt-mark hold kubectl kubeadm kubelet
+
+#Shutdown the vm 
+sudo shutdown -h now
+
+#Convert the vm to template in the vsphere portal. 

@@ -1,0 +1,6 @@
+---
+- import_playbook: kube-cntlr-deploy.yml
+- import_playbook: kube-nodes-deploy.yml
+- import_playbook: kube-drs-rules.yml
+- import_playbook: kube-nodes-hw.yml
+- import_playbook: kube-poweron-vms.yml

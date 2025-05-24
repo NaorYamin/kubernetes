@@ -1,0 +1,82 @@
+---
+- hosts: kube-cluster
+  become: yes
+  gather_facts: false
+
+  vars_files:
+    - envanswer.yml
+
+  tasks:
+  - name: Set hostname on node
+    hostname:
+      name: "{{ inventory_hostname }}"
+
+  - name: Install pre-requisite packages
+    apt:
+      name: ['apt-transport-https', 'gnupg', 'ca-certificates', 'curl', 'software-properties-common', 'inetutils-traceroute']
+      force_apt_get: yes
+      state: present
+
+  - name: Install Docker GPG key
+    shell: "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
+
+  - name: Add sources.list.d file for Docker
+    shell: "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null\"""
+    
+  - name: Update repo for Docker
+    apt:
+      update_cache: yes
+      force_apt_get: yes
+
+  - name: Install Docker
+    apt:
+      name: ['docker-ce']
+      force_apt_get: yes
+      state: present
+        
+  - name: Add "{{ local_user }}" to Docker group
+    user:
+      name: "{{ local_user }}"
+      groups: docker
+      append: yes
+
+  - name: Enable and start Docker service
+    systemd:
+      name: docker
+      enabled: yes
+      state: restarted
+
+  # workaround for an issue with Ubuntu 20.x and 22.x with containerd.io
+  - name: Fix containerd issue
+    ansible.builtin.file:
+      path: /etc/containerd/config.toml
+      state: absent
+
+  - name: Restart containerd
+    systemd:
+      name: containerd
+      enabled: yes
+      state: restarted
+
+  - name: Install Kubernetes GPG key
+    shell: "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/kubernetes-xenial.gpg"
+      
+  - name: Create sources.list.d file for Kubernetes
+    shell: "apt-add-repository \"deb http://apt.kubernetes.io/ kubernetes-xenial main\""
+    
+  - name: Update package cache in Ubuntu
+    apt:
+      update_cache: yes
+      force_apt_get: yes
+
+  - name: Install Kubernetes packages
+    apt:
+      name: ['kubeadm', 'kubectl', 'kubernetes-cni', 'kubelet']
+      force_apt_get: yes
+      state: present
+
+  - name: Install openvswitch for Antrea CNI
+    apt:
+      name: ['openvswitch-switch-dpdk']
+      state: present
+      force_apt_get: yes
